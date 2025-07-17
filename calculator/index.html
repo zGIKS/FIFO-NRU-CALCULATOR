@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador NRU Web</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Simulador Algoritmo NRU</h1>
+        <form id="nru-form">
+            <label>Referencias (ej: 1-R,1-W,2-R,...):<br>
+                <input type="text" id="refs" value="1-R,1-R,1-W,2-R,3-R,4-R,5-R,3-W,1-W,2-W,3-R,4-R" size="80">
+            </label><br>
+            <label>Marcos:
+                <input type="number" id="frames" value="4" min="1" max="16">
+            </label>
+            <label>Reset cada:
+                <input type="number" id="reset" value="4" min="1" max="32">
+            </label>
+            <button type="submit">Simular</button>
+        </form>
+        <div id="result" class="result"></div>
+        <div id="table"></div>
+    </div>
+    <script src="nru.js"></script>
+    <script>
+    document.getElementById('nru-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const refs = document.getElementById('refs').value.split(',').map(s => s.trim()).filter(Boolean);
+        const frames = parseInt(document.getElementById('frames').value);
+        const reset = parseInt(document.getElementById('reset').value);
+        const {fallos, rendimiento, finalRows} = window.nruSimulation(refs, frames, reset);
+        const tasaFallos = (fallos / refs.length).toFixed(4);
+        document.getElementById('result').innerHTML = `Número de Fallos: <b>${fallos}</b> &nbsp; | &nbsp; Rendimiento: <b>${rendimiento}%</b> &nbsp; | &nbsp; Tasa de Fallos: <b>${tasaFallos}</b>`;
+        let html = '<table><tbody>';
+        finalRows.forEach(row => {
+            html += '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('table').innerHTML = html;
+    });
+    </script>
+</body>
+</html>
