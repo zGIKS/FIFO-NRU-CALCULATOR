@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador NRU Web</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Simulador NRU Mejorado Web</title>
+    <link rel="stylesheet" href="./calculator/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Simulador Algoritmo NRU</h1>
+        <h1>Simulador Algoritmo NRU Mejorado</h1>
         <form id="nru-form">
             <label>Referencias (ej: 1-R,1-W,2-R,...):<br>
                 <input type="text" id="refs" value="1-R,1-R,1-W,2-R,3-R,4-R,5-R,3-W,1-W,2-W,3-R,4-R" size="80">
@@ -23,16 +23,27 @@
         </form>
         <div id="result" class="result"></div>
         <div id="table"></div>
+        <div style="margin-top:32px;">
+            <b>Clases NRU:</b><br>
+            Clase 0: R=0, M=0 (no referenciada, no modificada)<br>
+            Clase 1: R=0, M=1 (no referenciada, modificada)<br>
+            Clase 2: R=1, M=0 (referenciada, no modificada)<br>
+            Clase 3: R=1, M=1 (referenciada, modificada)<br>
+            <br>
+            <b>Reglas de reemplazo:</b><br>
+            - Se selecciona víctima de la clase más baja disponible (0 &gt; 1 &gt; 2 &gt; 3)<br>
+            - Dentro de la misma clase, se selecciona la página más antigua<br>
+            - Los bits R se resetean cada N accesos SOLO si no hay páginas modificadas (M=1)<br>
+        </div>
     </div>
-    <script src="nru.js"></script>
+    <script src="./calculator/nru.js"></script>
     <script>
     document.getElementById('nru-form').addEventListener('submit', function(e) {
         e.preventDefault();
         const refs = document.getElementById('refs').value.split(',').map(s => s.trim()).filter(Boolean);
         const frames = parseInt(document.getElementById('frames').value);
         const reset = parseInt(document.getElementById('reset').value);
-        const {fallos, rendimiento, finalRows} = window.nruSimulation(refs, frames, reset);
-        const tasaFallos = (fallos / refs.length).toFixed(4);
+        const {fallos, rendimiento, tasaFallos, finalRows} = window.nruSimulation(refs, frames, reset);
         document.getElementById('result').innerHTML = `Número de Fallos: <b>${fallos}</b> &nbsp; | &nbsp; Rendimiento: <b>${rendimiento}%</b> &nbsp; | &nbsp; Tasa de Fallos: <b>${tasaFallos}</b>`;
         let html = '<table><tbody>';
         finalRows.forEach(row => {
