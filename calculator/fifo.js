@@ -1,3 +1,5 @@
+
+(function() {
 // Simulación del algoritmo de reemplazo de páginas FIFO - Versión JS
 
 // Secuencia de referencias de páginas
@@ -10,7 +12,7 @@ let cola_fifo = []; // Cola FIFO para el orden de llegada
 let fallos = []; // Lista de "SI" o "NO" indicando si hubo fallo de página
 let estados_memoria = []; // Lista para guardar el estado de los marcos en cada instante
 
-console.log("=== SIMULACIÓN PASO A PASO ===");
+console.log("=== SIMULACIÓN FIFO PASO A PASO ===");
 let header = "Instante | Referencia ";
 for (let i = 0; i < marcos; i++) header += `| Marco ${i} `;
 header += "| Fallo | Acción";
@@ -58,7 +60,7 @@ for (let i = 0; i < referencias.length; i++) {
     resultado.push(fila);
 }
 
-console.log("\n=== ARREGLO DE RESULTADOS ===");
+console.log("\n=== TABLA DE RESULTADOS FIFO ===");
 let cabecera = ["Instante", "Referencia"];
 for (let i = 0; i < marcos; i++) cabecera.push(`Marco ${i}`);
 cabecera.push("Fallo");
@@ -72,19 +74,19 @@ const num_fallos = fallos.filter(f => f === "F").length;
 const tasa_fallos = num_fallos / referencias.length;
 const rendimiento = 100 * (referencias.length - num_fallos) / referencias.length;
 
-console.log("\n=== RESULTADOS FINALES ===");
+console.log("\n=== RESUMEN FINAL FIFO ===");
 console.log(`Número de Referencias: ${referencias.length}`);
 console.log(`Número de Fallos: ${num_fallos}`);
 console.log(`Tasa de Fallos: ${tasa_fallos.toFixed(4)}`);
 console.log(`Rendimiento (%): ${rendimiento.toFixed(2)}%`);
 
 // Verificación de integridad
-console.log("\n=== VERIFICACIÓN DE INTEGRIDAD ===");
+console.log("\n=== INTEGRIDAD DE FIFO ===");
 console.log(`Estado final de memoria: ${JSON.stringify(memoria)}`);
 console.log(`Estado final de cola FIFO: ${JSON.stringify(cola_fifo)}`);
 
 // Análisis adicional
-console.log("\n=== ANÁLISIS DETALLADO ===");
+console.log("\n=== ANÁLISIS DETALLADO FIFO ===");
 console.log("Secuencia de fallos por página:");
 for (let i = 0; i < referencias.length; i++) {
     let estado = fallos[i] === "F" ? "FALLO" : "HIT";
@@ -118,5 +120,41 @@ function generarCSV() {
 }
 
 const csvString = generarCSV();
-console.log("\n=== CONTENIDO DEL CSV ===");
+console.log("\n=== CONTENIDO DEL CSV FIFO ===");
 console.log(csvString);
+
+// --- DESCARGA CSV Y EXCEL ---
+if (typeof window !== 'undefined') {
+    // Botón para descargar CSV
+    let btnCsv = document.createElement('button');
+    btnCsv.textContent = 'Descargar CSV FIFO';
+    btnCsv.onclick = function() {
+        const blob = new Blob([csvString], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fifo_resultado.csv';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+    };
+    document.body.appendChild(btnCsv);
+
+    // Botón para descargar Excel (requiere SheetJS)
+    let btnXlsx = document.createElement('button');
+    btnXlsx.textContent = 'Descargar Excel FIFO';
+    btnXlsx.onclick = function() {
+        if (typeof XLSX === 'undefined') {
+            alert('SheetJS (XLSX) no está cargado.');
+            return;
+        }
+        // Convertir csvString a array de filas
+        const rows = csvString.split('\n').map(r => r.split(','));
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'FIFO');
+        XLSX.writeFile(wb, 'fifo_resultado.xlsx');
+    };
+    document.body.appendChild(btnXlsx);
+}
+})();

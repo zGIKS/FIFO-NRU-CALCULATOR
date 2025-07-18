@@ -1,3 +1,23 @@
+/* Botones de descarga */
+.descarga-btns {
+    margin: 24px 0 0 0;
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+}
+.descarga-btns button {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.descarga-btns button:hover {
+    background: #218838;
+}
 body {
     font-family: Arial, sans-serif;
     background: #f7f7f7;

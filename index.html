@@ -30,9 +30,10 @@
         </form>
         <div id="resultados"></div>
         <div id="csv-output"></div>
+        <div id="descarga-output"></div>
     </div>
-    <script src="./calculator/fifo.js"></script>
-    <script src="./calculator/nru.js"></script>
+    <!-- SheetJS para exportar a Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
     // --- Algoritmo selector y UI ---
     let currentAlg = 'FIFO';
@@ -49,7 +50,6 @@
         btnNru.classList.remove('active');
         document.getElementById('fifo-extra').style.display = 'block';
         nruExtra.style.display = 'none';
-    };
     btnNru.onclick = () => {
         currentAlg = 'NRU';
         btnNru.classList.add('active');
@@ -62,24 +62,74 @@
         e.preventDefault();
         resultados.innerHTML = '';
         csvOutput.innerHTML = '';
-        if (currentAlg === 'FIFO') {
-            // Obtener datos FIFO
+        document.getElementById('descarga-output').innerHTML = '';
+        let resumen, csv;
+        let alg = currentAlg;
+        if (alg === 'FIFO') {
             const refs = document.getElementById('referencias').value.split(',').map(x=>x.trim());
             const marcos = parseInt(document.getElementById('marcos').value);
-            // Ejecutar FIFO
-            const { resumen, csv } = runFifoSim(refs, marcos);
-            resultados.innerHTML = resumen;
-            csvOutput.innerHTML = `<pre>${csv}</pre>`;
+            ({ resumen, csv } = runFifoSim(refs, marcos));
         } else {
-            // Obtener datos NRU
             const refs = document.getElementById('referencias-nru').value.split(',').map(x=>x.trim());
             const marcos = parseInt(document.getElementById('marcos').value);
             const reset = parseInt(document.getElementById('reset').value);
-            // Ejecutar NRU
-            const { resumen, csv } = runNruSim(refs, marcos, reset);
-            resultados.innerHTML = resumen;
-            csvOutput.innerHTML = `<pre>${csv}</pre>`;
+            ({ resumen, csv } = runNruSim(refs, marcos, reset));
         }
+        resultados.innerHTML = resumen;
+        csvOutput.innerHTML = csvToTable(csv);
+        // Botones de descarga contextuales
+        let btns = document.createElement('div');
+        btns.className = 'descarga-btns';
+        // CSV
+        let btnCsv = document.createElement('button');
+        btnCsv.textContent = 'Descargar CSV ' + alg;
+        btnCsv.onclick = function() {
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = alg.toLowerCase() + '_resultado.csv';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+        };
+        btns.appendChild(btnCsv);
+        // Excel
+        let btnXlsx = document.createElement('button');
+        btnXlsx.textContent = 'Descargar Excel ' + alg;
+        btnXlsx.onclick = function() {
+            if (typeof XLSX === 'undefined') {
+                alert('SheetJS (XLSX) no está cargado.');
+                return;
+            }
+            const rows = csv.split('\n').map(r => r.split(','));
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, alg);
+            XLSX.writeFile(wb, alg.toLowerCase() + '_resultado.xlsx');
+        };
+        btns.appendChild(btnXlsx);
+        document.getElementById('descarga-output').appendChild(btns);
+    };
+
+    // Convierte CSV string a tabla HTML estética
+    function csvToTable(csv) {
+        const rows = csv.trim().split(/\r?\n/).map(r => r.split(','));
+        let html = "<div class='csv-table-wrap'><table class='csv-table'>";
+        for (let i = 0; i < rows.length; i++) {
+            html += '<tr>';
+            for (let j = 0; j < rows[i].length; j++) {
+                if (i === 0 || i === 1) {
+                    html += `<th>${rows[i][j] || ''}</th>`;
+                } else {
+                    html += `<td>${rows[i][j] || ''}</td>`;
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</table></div>';
+        return html;
+    }
     };
 
     // --- FIFO JS wrapper ---

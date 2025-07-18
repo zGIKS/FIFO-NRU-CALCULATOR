@@ -143,6 +143,7 @@ function print_nru_info() {
     console.log("- Los bits R se resetean cada N accesos SOLO si no hay páginas modificadas (M=1)");
 }
 
+(function() {
 // Datos del ejemplo
 const referencias = [
     "2-R", "2-W", "3-R", "1-R", "1-W", "3-R", "4-W", "5-R", "1-R", "1-W", "2-R", "3-W", "4-R"
@@ -166,6 +167,41 @@ console.log(`Rendimiento (%): ${rendimiento.toFixed(2)}%`);
 console.log(`\n=== CONTENIDO DEL CSV ===`);
 console.log(csvString);
 
+// --- DESCARGA CSV Y EXCEL ---
+if (typeof window !== 'undefined') {
+    // Botón para descargar CSV
+    let btnCsv = document.createElement('button');
+    btnCsv.textContent = 'Descargar CSV NRU';
+    btnCsv.onclick = function() {
+        const blob = new Blob([csvString], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'nru_resultado.csv';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+    };
+    document.body.appendChild(btnCsv);
+
+    // Botón para descargar Excel (requiere SheetJS)
+    let btnXlsx = document.createElement('button');
+    btnXlsx.textContent = 'Descargar Excel NRU';
+    btnXlsx.onclick = function() {
+        if (typeof XLSX === 'undefined') {
+            alert('SheetJS (XLSX) no está cargado.');
+            return;
+        }
+        // Convertir csvString a array de filas
+        const rows = csvString.split('\n').map(r => r.split(','));
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'NRU');
+        XLSX.writeFile(wb, 'nru_resultado.xlsx');
+    };
+    document.body.appendChild(btnXlsx);
+}
+
 console.log("\n=== MEJORAS IMPLEMENTADAS ===");
 console.log("1. ✅ Reset condicional: R se resetea SOLO si no hay páginas con M=1");
 console.log("2. ✅ Selección por antigüedad: dentro de la misma clase, se elige la página más antigua");
@@ -178,3 +214,4 @@ console.log("8. ✅ CORREGIDO: Alineación correcta de columnas en CSV");
 console.log("9. ✅ CORREGIDO: Reset ocurre en tick correcto (4, 8, 12...)");
 console.log("10. ✅ AGREGADO: Trazabilidad de reemplazos con clase NRU");
 console.log("11. ✅ MEJORADO: Snapshot incluye clase NRU para validación");
+})();
