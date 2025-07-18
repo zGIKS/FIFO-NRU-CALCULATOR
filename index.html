@@ -3,55 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador NRU Mejorado Web</title>
+    <title>Simulador FIFO & NRU</title>
     <link rel="stylesheet" href="./calculator/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Simulador Algoritmo NRU Mejorado</h1>
-        <form id="nru-form">
-            <label>Referencias (ej: 1-R,1-W,2-R,...):<br>
-                <input type="text" id="refs" value="1-R,1-R,1-W,2-R,3-R,4-R,5-R,3-W,1-W,2-W,3-R,4-R" size="80">
-            </label><br>
-            <label>Marcos:
-                <input type="number" id="frames" value="4" min="1" max="16">
-            </label>
-            <label>Reset cada:
-                <input type="number" id="reset" value="4" min="1" max="32">
-            </label>
+        <h1>Simulador de Algoritmos de Reemplazo de Páginas</h1>
+        <div class="alg-switch">
+            <button id="btn-fifo" class="active">FIFO</button>
+            <button id="btn-nru">NRU</button>
+        </div>
+        <form id="sim-form">
+            <div id="fifo-extra">
+                <label for="referencias">Referencias (separadas por coma):</label>
+                <input type="text" id="referencias" name="referencias" value="X,Y,Z,W,X,Y,L,X,Y,Z,W,L">
+            </div>
+            <label for="marcos">Número de marcos:</label>
+            <input type="number" id="marcos" name="marcos" min="1" value="4">
+            <div id="nru-extra" style="display:none;">
+                <label for="reset">Reset R cada (NRU):</label>
+                <input type="number" id="reset" name="reset" min="1" value="4">
+                <label for="referencias-nru">Referencias NRU (ej: 2-R,2-W,3-R...):</label>
+                <input type="text" id="referencias-nru" name="referencias-nru" value="2-R,2-W,3-R,1-R,1-W,3-R,4-W,5-R,1-R,1-W,2-R,3-W,4-R">
+            </div>
             <button type="submit">Simular</button>
         </form>
-        <div id="result" class="result"></div>
-        <div id="table"></div>
-        <div style="margin-top:32px;">
-            <b>Clases NRU:</b><br>
-            Clase 0: R=0, M=0 (no referenciada, no modificada)<br>
-            Clase 1: R=0, M=1 (no referenciada, modificada)<br>
-            Clase 2: R=1, M=0 (referenciada, no modificada)<br>
-            Clase 3: R=1, M=1 (referenciada, modificada)<br>
-            <br>
-            <b>Reglas de reemplazo:</b><br>
-            - Se selecciona víctima de la clase más baja disponible (0 &gt; 1 &gt; 2 &gt; 3)<br>
-            - Dentro de la misma clase, se selecciona la página más antigua<br>
-            - Los bits R se resetean cada N accesos SOLO si no hay páginas modificadas (M=1)<br>
-        </div>
+        <div id="resultados"></div>
+        <div id="csv-output"></div>
     </div>
+    <script src="./calculator/fifo.js"></script>
     <script src="./calculator/nru.js"></script>
     <script>
-    document.getElementById('nru-form').addEventListener('submit', function(e) {
+    // --- Algoritmo selector y UI ---
+    let currentAlg = 'FIFO';
+    const btnFifo = document.getElementById('btn-fifo');
+    const btnNru = document.getElementById('btn-nru');
+    const nruExtra = document.getElementById('nru-extra');
+    const form = document.getElementById('sim-form');
+    const resultados = document.getElementById('resultados');
+    const csvOutput = document.getElementById('csv-output');
+
+    btnFifo.onclick = () => {
+        currentAlg = 'FIFO';
+        btnFifo.classList.add('active');
+        btnNru.classList.remove('active');
+        document.getElementById('fifo-extra').style.display = 'block';
+        nruExtra.style.display = 'none';
+    };
+    btnNru.onclick = () => {
+        currentAlg = 'NRU';
+        btnNru.classList.add('active');
+        btnFifo.classList.remove('active');
+        document.getElementById('fifo-extra').style.display = 'none';
+        nruExtra.style.display = 'block';
+    };
+
+    form.onsubmit = (e) => {
         e.preventDefault();
-        const refs = document.getElementById('refs').value.split(',').map(s => s.trim()).filter(Boolean);
-        const frames = parseInt(document.getElementById('frames').value);
-        const reset = parseInt(document.getElementById('reset').value);
-        const {fallos, rendimiento, tasaFallos, finalRows} = window.nruSimulation(refs, frames, reset);
-        document.getElementById('result').innerHTML = `Número de Fallos: <b>${fallos}</b> &nbsp; | &nbsp; Rendimiento: <b>${rendimiento}%</b> &nbsp; | &nbsp; Tasa de Fallos: <b>${tasaFallos}</b>`;
-        let html = '<table><tbody>';
-        finalRows.forEach(row => {
-            html += '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>';
-        });
-        html += '</tbody></table>';
-        document.getElementById('table').innerHTML = html;
-    });
+        resultados.innerHTML = '';
+        csvOutput.innerHTML = '';
+        if (currentAlg === 'FIFO') {
+            // Obtener datos FIFO
+            const refs = document.getElementById('referencias').value.split(',').map(x=>x.trim());
+            const marcos = parseInt(document.getElementById('marcos').value);
+            // Ejecutar FIFO
+            const { resumen, csv } = runFifoSim(refs, marcos);
+            resultados.innerHTML = resumen;
+            csvOutput.innerHTML = `<pre>${csv}</pre>`;
+        } else {
+            // Obtener datos NRU
+            const refs = document.getElementById('referencias-nru').value.split(',').map(x=>x.trim());
+            const marcos = parseInt(document.getElementById('marcos').value);
+            const reset = parseInt(document.getElementById('reset').value);
+            // Ejecutar NRU
+            const { resumen, csv } = runNruSim(refs, marcos, reset);
+            resultados.innerHTML = resumen;
+            csvOutput.innerHTML = `<pre>${csv}</pre>`;
+        }
+    };
+
+    // --- FIFO JS wrapper ---
+    function runFifoSim(referencias, marcos) {
+        let memoria = [];
+        let cola_fifo = [];
+        let fallos = [];
+        let estados_memoria = [];
+        let resumen = `<h2>Resultados FIFO</h2><table><tr><th>Instante</th><th>Referencia</th>`;
+        for(let i=0;i<marcos;i++) resumen += `<th>Marco ${i}</th>`;
+        resumen += `<th>Fallo</th><th>Acción</th></tr>`;
+        for (let i = 0; i < referencias.length; i++) {
+            const pagina = referencias[i];
+            let accion = "";
+            if (memoria.includes(pagina)) {
+                fallos.push("X");
+                accion = "Hit - página ya en memoria";
+            } else {
+                fallos.push("F");
+                if (memoria.length < marcos) {
+                    memoria.push(pagina);
+                    cola_fifo.push(pagina);
+                    accion = `Cargar en marco ${memoria.length - 1}`;
+                } else {
+                    const pagina_reemplazar = cola_fifo.shift();
+                    const idx = memoria.indexOf(pagina_reemplazar);
+                    memoria[idx] = pagina;
+                    cola_fifo.push(pagina);
+                    accion = `Reemplazar ${pagina_reemplazar} por ${pagina} en marco ${idx}`;
+                }
+            }
+            let snapshot = memoria.slice();
+            while (snapshot.length < marcos) snapshot.push("-");
+            estados_memoria.push(snapshot);
+            resumen += `<tr><td>${i+1}</td><td>${pagina}</td>`;
+            for(let val of snapshot) resumen += `<td>${val}</td>`;
+            resumen += `<td>${fallos[i]}</td><td>${accion}</td></tr>`;
+        }
+        // Resumen final
+        const num_fallos = fallos.filter(f => f === "F").length;
+        const tasa_fallos = num_fallos / referencias.length;
+        const rendimiento = 100 * (referencias.length - num_fallos) / referencias.length;
+        resumen += `</table><div class='summary'><b>Número de Referencias:</b> ${referencias.length}<br><b>Número de Fallos:</b> ${num_fallos}<br><b>Tasa de Fallos:</b> ${tasa_fallos.toFixed(4)}<br><b>Rendimiento (%):</b> ${rendimiento.toFixed(2)}%</div>`;
+        // CSV
+        let csv = '';
+        csv += ['Numero de fallos', num_fallos, ...Array(referencias.length-1).fill('')].join(',') + '\n';
+        csv += ['Rendimiento', `${rendimiento.toFixed(0)}%`, ...Array(referencias.length-1).fill('')].join(',') + '\n';
+        csv += ['Referencias', ...referencias].join(',') + '\n';
+        for (let i = 0; i < marcos; i++) {
+            let fila = [`Marco${i+1}`];
+            for (let j = 0; j < referencias.length; j++) {
+                fila.push(estados_memoria[j][i]);
+            }
+            csv += fila.join(',') + '\n';
+        }
+        csv += ['FALLO', ...fallos].join(',') + '\n';
+        csv += ['RESET', ...Array(referencias.length).fill('X')].join(',') + '\n';
+        return { resumen, csv };
+    }
+
+    // --- NRU JS wrapper ---
+    function runNruSim(ref_stream, frames_count, reset_interval) {
+        class Page {
+            constructor(number, R = 0, M = 0, timestamp = null) {
+                this.number = number;
+                this.R = R;
+                this.M = M;
+                this.timestamp = timestamp;
+            }
+            class_nru() { return 2 * this.R + this.M; }
+        }
+        function snapshot_memory(memory) {
+            return memory.map(p => p ? `${p.number} R=${p.R} M=${p.M} C=${p.class_nru()}` : "-");
+        }
+        function reset_R_bits(memory) {
+            const has_modified_pages = memory.some(page => page && page.M === 1);
+            if (has_modified_pages) return false;
+            for (const page of memory) if (page) page.R = 0;
+            return true;
+        }
+        let memory = Array(frames_count).fill(null);
+        let fallos = 0;
+        let tick = 0;
+        let marcos_output = Array(frames_count).fill(0).map(()=>[]);
+        let fallo_row = [];
+        let resets_row = [];
+        let resumen = `<h2>Resultados NRU</h2><table><tr><th>Referencia</th>`;
+        for(let i=0;i<frames_count;i++) resumen += `<th>Marco ${i+1}</th>`;
+        resumen += `<th>Fallo</th><th>Reset_R</th></tr>`;
+        for (let idx = 0; idx < ref_stream.length; idx++) {
+            let ref = ref_stream[idx];
+            let [page_number, op] = ref.split('-');
+            page_number = parseInt(page_number);
+            op = op.toUpperCase();
+            tick++;
+            let reset_occurred = false;
+            if (tick % reset_interval === 0) {
+                reset_occurred = reset_R_bits(memory);
+            }
+            let in_memory = false;
+            for (const page of memory) {
+                if (page && page.number === page_number) {
+                    page.R = 1;
+                    if (op === 'W') page.M = 1;
+                    page.timestamp = tick;
+                    in_memory = true;
+                    break;
+                }
+            }
+            let fallo = false;
+            if (!in_memory) {
+                fallos++;
+                fallo = true;
+                let empty_index = memory.indexOf(null);
+                if (empty_index !== -1) {
+                    memory[empty_index] = new Page(page_number, 0, op === 'W' ? 1 : 0, tick);
+                } else {
+                    let classes = {0: [], 1: [], 2: [], 3: []};
+                    for (let i = 0; i < memory.length; i++) {
+                        const page = memory[i];
+                        if (page) classes[page.class_nru()].push({i, t: page.timestamp});
+                    }
+                    let victim_index = null;
+                    for (let cls = 0; cls < 4; cls++) {
+                        if (classes[cls].length) {
+                            classes[cls].sort((a, b) => a.t - b.t);
+                            victim_index = classes[cls][0].i;
+                            break;
+                        }
+                    }
+                    if (victim_index !== null) {
+                        memory[victim_index] = new Page(page_number, 0, op === 'W' ? 1 : 0, tick);
+                    }
+                }
+            }
+            const snapshot = snapshot_memory(memory);
+            for (let i = 0; i < frames_count; i++) marcos_output[i].push(snapshot[i]);
+            fallo_row.push(fallo ? 'F' : 'X');
+            resets_row.push(reset_occurred ? 'R' : 'X');
+            resumen += `<tr><td>${ref}</td>`;
+            for(let val of snapshot) resumen += `<td>${val}</td>`;
+            resumen += `<td>${fallo ? 'F' : 'X'}</td><td>${reset_occurred ? 'R' : 'X'}</td></tr>`;
+        }
+        const tasa_fallos = fallos / ref_stream.length;
+        const rendimiento = 100 * (ref_stream.length - fallos) / ref_stream.length;
+        resumen += `</table><div class='summary'><b>Número de Referencias:</b> ${ref_stream.length}<br><b>Número de Fallos:</b> ${fallos}<br><b>Tasa de Fallos:</b> ${tasa_fallos.toFixed(4)}<br><b>Rendimiento (%):</b> ${rendimiento.toFixed(2)}%</div>`;
+        // CSV
+        let final_csv_rows = [];
+        const total_cols = ref_stream.length + 1;
+        final_csv_rows.push(["Numero de fallos", String(fallos), ...Array(total_cols - 2).fill("")]);
+        final_csv_rows.push(["Rendimiento", `${Math.round(rendimiento)}%`, ...Array(total_cols - 2).fill("")]);
+        final_csv_rows.push(["Referencias", ...ref_stream]);
+        for (let i = 0; i < frames_count; i++) final_csv_rows.push([`Marco${i+1}`, ...marcos_output[i]]);
+        final_csv_rows.push(["FALLO", ...fallo_row]);
+        final_csv_rows.push(["RESET", ...resets_row]);
+        function toCSV(rows) { return rows.map(r => r.join(",")).join("\n"); }
+        const csv = toCSV(final_csv_rows);
+        return { resumen, csv };
+    }
     </script>
 </body>
 </html>
