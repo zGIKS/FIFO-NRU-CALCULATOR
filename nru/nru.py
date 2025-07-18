@@ -1,5 +1,4 @@
 import csv
-import time
 
 
 class Page:
@@ -17,7 +16,10 @@ class Page:
 
 
 def snapshot_memory(memory):
-    return [str(p) if p else "-" for p in memory]
+    return [
+        f"{p.number} R={p.R} M={p.M} C={p.class_nru()}" if p else "-"
+        for p in memory
+    ]
 
 
 def reset_R_bits(memory):
@@ -43,12 +45,13 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
     
     print("\nReferencia |", end=" ")
     for i in range(frames_count):
-        print(f"Marco {i+1}".ljust(12), end=" | ")
+        print(f"Marco {i+1}".ljust(18), end=" | ")
     print("Fallo | Reset_R")
-    print("-" * (13 + frames_count * 15 + 18))
+    print("-" * (13 + frames_count * 21 + 18))
 
     marcos_output = [[] for _ in range(frames_count)]
     fallo_row = []
+    resets_row = []  # Nueva lista para tracking de resets
 
     for ref in ref_stream:
         page_number, op = ref.split('-')
@@ -59,7 +62,7 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
 
         # Reset periódico ANTES de procesar la referencia actual
         reset_occurred = False
-        if (tick - 1) % reset_interval == 0 and tick != 1:
+        if tick % reset_interval == 0:
             reset_occurred = reset_R_bits(memory)
 
         # Buscar si la página está en memoria
@@ -69,9 +72,12 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
                 page.R = 1
                 if op == 'W':
                     page.M = 1
+                page.timestamp = tick  # CORREGIDO: Actualizar timestamp en cada referencia
                 in_memory = True
                 break
 
+        # Un fallo ocurre cuando una página no está presente en memoria
+        # (ya sea porque el marco está vacío o porque requiere reemplazo)
         fallo = False
         if not in_memory:
             fallos += 1
@@ -85,7 +91,7 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
 
             if empty_index is not None:
                 # Colocar en marco vacío
-                memory[empty_index] = Page(page_number, R=1, M=(1 if op == 'W' else 0), timestamp=tick)
+                memory[empty_index] = Page(page_number, R=0, M=(1 if op == 'W' else 0), timestamp=tick)
             else:
                 # Algoritmo NRU: buscar víctima por clase
                 classes = {0: [], 1: [], 2: [], 3: []}
@@ -103,28 +109,36 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
                         break
                 
                 if victim_index is not None:
+                    old_page = memory[victim_index]
+                    print(f"    [REEMPLAZO] Página {old_page.number} (R={old_page.R}, M={old_page.M}, C={old_page.class_nru()}) → Página {page_number}")
                     new_M = 1 if op == 'W' else 0
-                    memory[victim_index] = Page(page_number, R=1, M=new_M, timestamp=tick)
+                    memory[victim_index] = Page(page_number, R=0, M=new_M, timestamp=tick)
 
         # Imprimir y guardar snapshot
         snapshot = snapshot_memory(memory)
         print(f"{ref:>9} |", end=" ")
         for marco_str in snapshot:
-            print(marco_str.ljust(12), end=" | ")
+            print(marco_str.ljust(18), end=" | ")
         print(f"{'F' if fallo else ' ':>5} | {'R' if reset_occurred else ' ':>7}")
         
         for i in range(frames_count):
             marcos_output[i].append(snapshot[i])
         fallo_row.append("F" if fallo else "X")
+        resets_row.append("R" if reset_occurred else "X")  # CORREGIDO: Agregar reset tracking
 
-    # Generar CSV con resultados
+    # Generar CSV con resultados - CORREGIDO: Alineación correcta
     final_csv_rows = []
-    final_csv_rows.append(["Numero de fallos", str(fallos)] + ["" for _ in range(len(ref_stream)-1)])
-    final_csv_rows.append(["Rendimiento", f"{int(100 * (len(ref_stream) - fallos) / len(ref_stream))}%"] + ["" for _ in range(len(ref_stream)-1)])
-    final_csv_rows.append([""] + [r for r in ref_stream])
+    total_cols = len(ref_stream) + 1  # +1 para la columna de etiqueta
+    
+    final_csv_rows.append(["Numero de fallos", str(fallos)] + [""] * (total_cols - 2))
+    final_csv_rows.append(["Rendimiento", f"{int(100 * (len(ref_stream) - fallos) / len(ref_stream))}%"] + [""] * (total_cols - 2))
+    final_csv_rows.append(["Referencias"] + [r for r in ref_stream])
+    
     for i in range(frames_count):
         final_csv_rows.append([f"Marco{i+1}"] + marcos_output[i])
+    
     final_csv_rows.append(["FALLO"] + fallo_row)
+    final_csv_rows.append(["RESET"] + resets_row)  # CORREGIDO: Incluir fila de resets
 
     with open("nru_simulacion.csv", "w", newline="") as f:
         writer = csv.writer(f)
@@ -137,10 +151,10 @@ def nru_simulation(ref_stream, frames_count, reset_interval=4):
 
 def print_nru_info():
     print("=== CLASES NRU ===")
-    print("Clase 0: R=0, M=0 (no referenciada recientemente, no modificada)")
+    print("Clase 0: R=0, M=0 (no referenciada recientemente, no modificada) - MEJOR VÍCTIMA")
     print("Clase 1: R=0, M=1 (no referenciada recientemente, modificada)")
     print("Clase 2: R=1, M=0 (referenciada recientemente, no modificada)")
-    print("Clase 3: R=1, M=1 (referenciada recientemente, modificada)")
+    print("Clase 3: R=1, M=1 (referenciada recientemente, modificada) - PEOR VÍCTIMA")
     print("\nReglas de reemplazo:")
     print("- Se selecciona víctima de la clase más baja disponible (0 > 1 > 2 > 3)")
     print("- Dentro de la misma clase, se selecciona la página más antigua")
@@ -148,10 +162,8 @@ def print_nru_info():
 
 
 # Datos del ejemplo
-
-# Exercise 
 referencias = [
-    "1-R", "1-R", "1-W", "2-R", "3-R", "4-R", "5-R", "3-W", "1-W", "2-W", "3-R", "4-R"
+    "2-R", "2-W", "3-R", "1-R", "1-W", "3-R", "4-W", "5-R", "1-R", "1-W", "2-R", "3-W", "4-R"
 ]
 
 
@@ -178,3 +190,9 @@ if __name__ == "__main__":
     print("3. ✅ Timestamps para tracking de antigüedad de páginas")
     print("4. ✅ Lógica de reset más fiel al algoritmo NRU teórico")
     print("5. ✅ Mejor documentación y estructura del código")
+    print("6. ✅ CORREGIDO: Timestamp se actualiza en cada referencia")
+    print("7. ✅ CORREGIDO: Fila de resets incluida en CSV")
+    print("8. ✅ CORREGIDO: Alineación correcta de columnas en CSV")
+    print("9. ✅ CORREGIDO: Reset ocurre en tick correcto (4, 8, 12...)")
+    print("10. ✅ AGREGADO: Trazabilidad de reemplazos con clase NRU")
+    print("11. ✅ MEJORADO: Snapshot incluye clase NRU para validación")
